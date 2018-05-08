@@ -1,6 +1,7 @@
 package indicators
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -16,9 +17,11 @@ func TestRound(t *testing.T) {
 	}
 
 	for index, table := range tables {
-		roundedNumber := round(table.numberToRound)
+		roundedNumber, err := round(table.numberToRound)
 
-		if roundedNumber != table.result {
+		if err != nil {
+			fmt.Println(err.Error())
+		} else if roundedNumber != table.result {
 			t.Errorf("Rounded Number #%d was incorrect, got: %v, want %v.", index, roundedNumber, table.result)
 		}
 	}

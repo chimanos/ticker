@@ -1,6 +1,7 @@
 package indicators
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -15,9 +16,11 @@ func TestAverageGain(t *testing.T) {
 	}
 
 	for index, table := range tables {
-		averageGain := AverageGain(table.lastGain, table.lastGains)
+		averageGain, err := AverageGain(table.lastGain, table.lastGains)
 
-		if averageGain != table.result {
+		if err != nil {
+			fmt.Println(err.Error())
+		} else if averageGain != table.result {
 			t.Errorf("Average Gain #%d was incorrect, got: %v, want %v.", index, averageGain, table.result)
 		}
 	}
@@ -33,9 +36,11 @@ func TestAverageLoss(t *testing.T) {
 	}
 
 	for index, table := range tables {
-		averageLoss := AverageLoss(table.lastLoss, table.lastLosses)
+		averageLoss, err := AverageLoss(table.lastLoss, table.lastLosses)
 
-		if averageLoss != table.result {
+		if err != nil {
+			fmt.Println(err.Error())
+		} else if averageLoss != table.result {
 			t.Errorf("Average Loss #%d was incorrect, got: %v, want %v.", index, averageLoss, table.result)
 		}
 	}
@@ -51,9 +56,11 @@ func TestRsi(t *testing.T) {
 	}
 
 	for index, table := range tables {
-		rsi := Rsi(table.averageGain, table.averageLoss)
+		rsi, err := Rsi(table.averageGain, table.averageLoss)
 
-		if rsi != table.result {
+		if err != nil {
+			fmt.Println(err.Error())
+		} else if rsi != table.result {
 			t.Errorf("RSI #%d was incorrect, got: %v, want %v.", index, rsi, table.result)
 		}
 	}

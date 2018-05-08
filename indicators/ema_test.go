@@ -1,6 +1,7 @@
 package indicators
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -13,9 +14,11 @@ func TestSma(t *testing.T) {
 	}
 
 	for index, table := range tables {
-		sma := sma(table.lastPrices)
+		sma, err := SimpleMovingAverage(table.lastPrices)
 
-		if sma != table.result {
+		if err != nil {
+			fmt.Println(err.Error())
+		} else if sma != table.result {
 			t.Errorf("Sma #%d was incorrect, got: %v, want %v.", index, sma, table.result)
 		}
 	}
@@ -36,9 +39,11 @@ func TestEma(t *testing.T) {
 	}
 
 	for index, table := range tables {
-		ema := ema(table.lastPrices, table.previousEma, table.counter)
+		ema, err := ExponentialMovingAverage(table.lastPrices, table.previousEma, table.counter)
 
-		if ema != table.result {
+		if err != nil {
+			fmt.Println(err.Error())
+		} else if ema != table.result {
 			t.Errorf("Ema #%d was incorrect, got: %v, want %v.", index, ema, table.result)
 		}
 	}
