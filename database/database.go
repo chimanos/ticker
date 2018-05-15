@@ -1,10 +1,10 @@
 package database
 
 import (
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/postgres"
 	"strconv"
 	"fmt"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/postgres"
 )
 
 type Message struct {
@@ -19,14 +19,18 @@ type Message struct {
 
 var db *gorm.DB
 
-func Connect(host string, port int, user string, dbname string, password string) {
+func Connect(host string, port int, dbname string, user string, password string) {
 	var err error
-	db, err = gorm.Open("postgres", "host=" + host + " port=" + strconv.Itoa(port) + " user=" + user + " dbname=" + dbname + " password=" + password)
+	
+	key := fmt.Sprintf("host=%s port=%v dbname=%s user=%s password=%s", host, port, dbname, user, password)
+	db, err = gorm.Open("postgres", key)
+
+	if err != nil || db == nil {
+		panic("Connection to Ticker database failed.")
+	}
+
 	db.LogMode(true)
 	db.SingularTable(true)
-	if err != nil || db == nil {
-		panic("Connexion to Ticker database failed.")
-	}
 }
 
 func AddMessage(message Message) {
@@ -47,7 +51,7 @@ func SelectAllMessage() interface{} {
 	return db.Find(&Message{}).Value
 }
 
-func CloseConnexion() {
+func Close() {
 	if db != nil {
 		defer db.Close()
 	}

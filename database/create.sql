@@ -1,13 +1,11 @@
 CREATE TABLE Message
 (
-  id serial NOT NULL,
-  pair text,
-	market text,
-	price double precision,
-	best_ask double precision,
-	best_bid double precision,
-	time bigint,
-  PRIMARY KEY (id)
+  	id SERIAL NOT NULL,
+  	pair VARCHAR(15),
+	market VARCHAR(15),
+	price DOUBLE PRECISION,
+	best_ask DOUBLE PRECISION,
+	best_bid DOUBLE PRECISION,
+	time BIGINT,
+  	PRIMARY KEY (id)
 )
-
-

@@ -4,14 +4,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"encoding/json"
 
 	"github.com/bsm/sarama-cluster"
 	"github.com/mxpetit/ticker/database"
-	"encoding/json"
 	"github.com/mxpetit/ticker/utils"
 )
 
-type ExtraFlux struct {
+type extra struct {
 	Ask_size float64
 	Bid_size float64
 	Daily_change float64
@@ -21,19 +21,19 @@ type ExtraFlux struct {
 	Volume_24h float64
 }
 
-type MessageFlux struct {
+type messageFlux struct {
 	Pair string
 	Time string
 	Price float64
 	Market string
 	Best_ask float64
 	Best_bid float64
-	Extra ExtraFlux
+	Extra extra
 }
 
 func main() {
 	//Database connexion
-	database.Connect("localhost", 5432, "postgres", "ticker", "root")
+	database.Connect("localhost", 5432, "ticker", "postgres", "root")
 
 	// init (custom) config, enable errors and notifications
 	config := cluster.NewConfig()
@@ -43,7 +43,7 @@ func main() {
 	// init consumer
 	brokers := []string{"127.0.0.1:9092"}
 	topics := []string{"aggregator"}
-	consumer, err := cluster.NewConsumer(brokers, "aggragator", topics, config)
+	consumer, err := cluster.NewConsumer(brokers, "aggregator", topics, config)
 	if err != nil {
 		panic(err)
 	}
@@ -72,7 +72,7 @@ func main() {
 		select {
 		case msg, ok := <-consumer.Messages():
 			if ok {
-				var msgFlux *MessageFlux
+				var msgFlux *messageFlux
 				json.Unmarshal([]byte(msg.Value), &msgFlux)
 				if msgFlux != nil {
 					//Save message in database
@@ -87,10 +87,8 @@ func main() {
 				consumer.MarkOffset(msg, "")	// mark message as processed
 			}
 		case <-signals:
-			database.CloseConnexion()
+			database.Close()
 			return
 		}
 	}
-
-	database.CloseConnexion()
 }
