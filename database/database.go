@@ -6,8 +6,8 @@ import (
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
-	"github.com/chimanos/ticker/consumer"
-	"github.com/chimanos/ticker/utils"
+	"github.com/mxpetit/ticker/consumer"
+	"github.com/mxpetit/ticker/utils"
 	log "github.com/sirupsen/logrus"
 )
 

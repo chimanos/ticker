@@ -6,8 +6,8 @@ import (
 	"syscall"
 	"strings"
 
-	"github.com/chimanos/ticker/database"
-	"github.com/chimanos/ticker/consumer"
+	"github.com/mxpetit/ticker/database"
+	"github.com/mxpetit/ticker/consumer"
 	log "github.com/sirupsen/logrus"
 )
 
