@@ -1,10 +1,14 @@
 package database
 
 import (
-	"strconv"
 	"fmt"
+	"sync"
+
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
+	"github.com/chimanos/ticker/consumer"
+	"github.com/chimanos/ticker/utils"
+	log "github.com/sirupsen/logrus"
 )
 
 type Message struct {
@@ -17,44 +21,78 @@ type Message struct {
 	Time int64
 }
 
-var db *gorm.DB
+type Database interface {
+	Start(chan *consumer.Message)
+	Close()
+}
 
-func Connect(host string, port int, dbname string, user string, password string) {
-	var err error
-	
-	key := fmt.Sprintf("host=%s port=%v dbname=%s user=%s password=%s", host, port, dbname, user, password)
-	db, err = gorm.Open("postgres", key)
 
-	if err != nil || db == nil {
-		panic("Connection to Ticker database failed.")
+type DatabaseWrapper struct {
+	DB *gorm.DB
+	waitGroup sync.WaitGroup
+	quit chan struct{}
+}
+
+func NewDatabase(hosts []string, dbname string, port string, user string, password string) (Database, error) {
+	log.WithFields(log.Fields{
+		"Hosts":   hosts,
+		"Port": port,
+		"DBName": dbname,
+		"User": user,
+	}).Info("Connecting ticker database")
+
+	key := fmt.Sprintf("host=%s port=%s dbname=%s user=%s password=%s", hosts, port, dbname, user, password)
+	db, err := gorm.Open("postgres", key)
+
+	if err != nil {
+		return nil, err
 	}
 
 	db.LogMode(true)
 	db.SingularTable(true)
+
+	return &DatabaseWrapper{
+		DB: db,
+		quit: make(chan struct{}, 2),
+	}, nil
 }
 
-func AddMessage(message Message) {
-	if db != nil {
-		db.Create(&message)
-		fmt.Println("Message added successfully.")
-	} else {
-		panic("Error with add message, database is null and not connected.")
-	}
+func (k *DatabaseWrapper) Start(channel chan *consumer.Message) {
+	k.waitGroup.Add(1)
+	go func() {
+		for listen := true; listen; {
+			select {
+			case msg  := <- channel:
+				k.AddMessage(Message{
+					Pair: msg.Pair,
+					Market: msg.Market,
+					Price: msg.Price,
+					BestAsk: msg.Best_ask,
+					BestBid: msg.Best_bid,
+					Time: utils.GetTimestampFromDate(msg.Time)})
+			case <-k.quit:
+				listen = false
+			}
+		}
+		log.Info("Ticker database closing")
+		k.quit <- struct{}{}
+	}()
+	k.waitGroup.Wait()
 }
 
-/*func GetPricesBetween(start string, end string) []float64 {
-	prices := db.Where("time BETWEEN ? AND ?", start, end).Find(&Message{}).Value
-	return make([]float64, prices)
-}*/
-
-func SelectAllMessage() interface{} {
-	return db.Find(&Message{}).Value
+func (k *DatabaseWrapper) AddMessage(message Message) {
+	k.DB.Create(&message)
+	log.Info("Message added to database")
 }
 
-func Close() {
-	if db != nil {
-		defer db.Close()
-	}
+func (k *DatabaseWrapper) Close() {
+	log.Info("Ticker database closing")
+
+	k.quit <- struct{}{}
+	<-k.quit
+	k.DB.Close()
+
+	log.Info("Ticker consumer shutted down")
 }
 
 

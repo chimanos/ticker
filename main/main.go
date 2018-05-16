@@ -1,94 +1,72 @@
 package main
 
 import (
-	"log"
 	"os"
 	"os/signal"
-	"encoding/json"
+	"syscall"
+	"strings"
 
-	"github.com/bsm/sarama-cluster"
-	"github.com/mxpetit/ticker/database"
-	"github.com/mxpetit/ticker/utils"
+	"github.com/chimanos/ticker/database"
+	"github.com/chimanos/ticker/consumer"
+	log "github.com/sirupsen/logrus"
 )
 
-type extra struct {
-	Ask_size float64
-	Bid_size float64
-	Daily_change float64
-	Daily_change_percent float64
-	Higher_24h float64
-	Lower_24h float64
-	Volume_24h float64
-}
+func init() {
+	log.SetFormatter(&log.TextFormatter{})
+	log.SetOutput(os.Stdout)
+	log.SetLevel(log.DebugLevel)
 
-type messageFlux struct {
-	Pair string
-	Time string
-	Price float64
-	Market string
-	Best_ask float64
-	Best_bid float64
-	Extra extra
+	if os.Getenv("TICKER_ENV") != "" {
+		log.SetLevel(log.InfoLevel)
+	}
 }
 
 func main() {
-	//Database connexion
-	database.Connect("localhost", 5432, "ticker", "postgres", "root")
+	signalChannel := make(chan os.Signal, 2)
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
 
-	// init (custom) config, enable errors and notifications
-	config := cluster.NewConfig()
-	config.Consumer.Return.Errors = true
-	config.Group.Return.Notifications = true
+	clusterIPs := strings.Split(os.Getenv("TICKER_KAFKA_IPS"), ",")
+	kafkaTopics := strings.Split(os.Getenv("TICKER_KAFKA_TOPICS"), ",")
+	kafkaGroup := os.Getenv("TICKER_KAFKA_GROUPS")
 
-	// init consumer
-	brokers := []string{"127.0.0.1:9092"}
-	topics := []string{"aggregator"}
-	consumer, err := cluster.NewConsumer(brokers, "aggregator", topics, config)
+	databaseHosts := strings.Split(os.Getenv("TICKER_DATABASE_HOSTS"), ",")
+	databaseName := os.Getenv("TICKER_DATABASE_NAME")
+	databasePort := os.Getenv("TICKER_DATABASE_PORT")
+	databaseUser := os.Getenv("TICKER_DATABASE_USER")
+	databasePassword := os.Getenv("TICKER_DATABASE_PASSWORD")
+
+	database, err := database.NewDatabase(databaseHosts, databaseName, databasePort, databaseUser, databasePassword)
+
 	if err != nil {
-		panic(err)
+		log.WithFields(log.Fields{
+			"error": err,
+		}).Fatal("Unable to start database connection")
+
+		os.Exit(1)
 	}
-	defer consumer.Close()
 
-	// trap SIGINT to trigger a shutdown.
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt)
+	consumer, err := consumer.NewConsumer(clusterIPs, kafkaTopics, kafkaGroup)
 
-	// consume errors
+	if err != nil {
+		log.WithFields(log.Fields{
+			"error": err,
+		}).Fatal("Unable to instantiate ticker consumer")
+
+		os.Exit(1)
+	}
+
 	go func() {
-		for err := range consumer.Errors() {
-			log.Printf("Error: %s\n", err.Error())
-		}
+		<-signalChannel
+		database.Close()
+		consumer.Stop()
+		close(signalChannel)
 	}()
 
-	// consume notifications
-	go func() {
-		for ntf := range consumer.Notifications() {
-			log.Printf("Rebalanced: %+v\n", ntf)
-		}
-	}()
+	messages := consumer.Start()
+	database.Start(messages)
 
-	// consume messages, watch signals
-	for {
-		select {
-		case msg, ok := <-consumer.Messages():
-			if ok {
-				var msgFlux *messageFlux
-				json.Unmarshal([]byte(msg.Value), &msgFlux)
-				if msgFlux != nil {
-					//Save message in database
-					database.AddMessage(database.Message{
-						Pair: msgFlux.Pair,
-						Market: msgFlux.Market,
-						Price: msgFlux.Price,
-						BestAsk: msgFlux.Best_ask,
-						BestBid: msgFlux.Best_bid,
-						Time: utils.GetTimestampFromDate(msgFlux.Time)})
-				}
-				consumer.MarkOffset(msg, "")	// mark message as processed
-			}
-		case <-signals:
-			database.Close()
-			return
-		}
-	}
+	log.Info("Candelabot ticker shutted down successfully")
+	os.Exit(0)
 }
+
+
